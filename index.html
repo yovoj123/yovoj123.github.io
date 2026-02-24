@@ -2,18 +2,35 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<title>2D Minecraft med Gravitation</title>
+<title>2D Minecraft med Inventory</title>
 <style>
-  body { margin: 0; overflow: hidden; background: #87CEEB; }
+  body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
   canvas { display: block; background: #87CEEB; }
+  #inventory {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+  }
+  .slot {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #555;
+    cursor: pointer;
+  }
+  .slot.selected {
+    border-color: yellow;
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="inventory"></div>
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
 canvas.width = 800;
 canvas.height = 600;
 
@@ -21,11 +38,13 @@ const TILE_SIZE = 40;
 const WORLD_WIDTH = canvas.width / TILE_SIZE;
 const WORLD_HEIGHT = canvas.height / TILE_SIZE;
 
-// Blocktyper: 0 = tomt, 1 = jord, 2 = gräs
+// Blocktyper: 0 = tomt, 1 = jord, 2 = gräs, 3 = sten, 4 = vatten
 const BLOCKS = {
   0: null,
   1: "#8B4513", // jord
-  2: "#228B22"  // gräs
+  2: "#228B22", // gräs
+  3: "#808080", // sten
+  4: "#1E90FF"  // vatten
 };
 
 // Skapa världen
@@ -34,16 +53,16 @@ for(let x=0; x<WORLD_WIDTH; x++){
   world[x] = [];
   for(let y=0; y<WORLD_HEIGHT; y++){
     if(y === WORLD_HEIGHT - 2){
-      world[x][y] = 2; // gräs på toppen
+      world[x][y] = 2; // gräs
     } else if(y > WORLD_HEIGHT - 2){
-      world[x][y] = 1; // jord under gräs
+      world[x][y] = 1; // jord
     } else {
       world[x][y] = 0; // tomt
     }
   }
 }
 
-// Spelarens position och fysik
+// Spelarens fysik
 let player = {
   x: 5,
   y: 5,
@@ -53,34 +72,47 @@ let player = {
   onGround: false
 };
 
-// Spelinställningar
 const gravity = 0.5;
 const jumpStrength = -10;
 
 // Tangenter
 const keys = {};
-
-// Händelser
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
-// Hantera musklick för block
-canvas.addEventListener("mousedown", (e) => {
+// Inventory
+const inventoryDiv = document.getElementById("inventory");
+let selectedBlock = 1;
+const blockIds = [1,2,3,4];
+blockIds.forEach(id => {
+  const slot = document.createElement("div");
+  slot.classList.add("slot");
+  slot.style.backgroundColor = BLOCKS[id];
+  if(id === selectedBlock) slot.classList.add("selected");
+  slot.addEventListener("click", () => {
+    selectedBlock = id;
+    document.querySelectorAll(".slot").forEach(s => s.classList.remove("selected"));
+    slot.classList.add("selected");
+  });
+  inventoryDiv.appendChild(slot);
+});
+
+// Mouse click för block
+canvas.addEventListener("mousedown", e => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
   const tx = Math.floor(mx / TILE_SIZE);
   const ty = Math.floor(my / TILE_SIZE);
-
-  if(e.button === 0) world[tx][ty] = 1; // vänsterklick = jord
-  if(e.button === 2) world[tx][ty] = 0; // högerklick = ta bort
+  if(e.button === 0) world[tx][ty] = selectedBlock;
+  if(e.button === 2) world[tx][ty] = 0;
 });
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
-// Kolla kollision
+// Kollision
 function isSolid(x, y){
   if(x < 0 || y < 0 || x >= WORLD_WIDTH || y >= WORLD_HEIGHT) return true;
-  return world[x][y] !== 0;
+  return world[x][y] !== 0 && world[x][y] !== 4; // vatten inte solid
 }
 
 // Uppdatera spelaren
@@ -93,16 +125,15 @@ function updatePlayer(){
   player.velY += gravity;
   player.y += player.velY * 0.1;
 
-  // Kolla kollisioner
+  // Kollisionskoll
   let left = Math.floor(player.x);
   let right = Math.floor(player.x + player.width - 0.001);
   let top = Math.floor(player.y);
   let bottom = Math.floor(player.y + player.height - 0.001);
 
   player.onGround = false;
-  // Bottenkoll
   for(let x=left; x<=right; x++){
-    if(isSolid(x, bottom)){
+    if(isSolid(x,bottom)){
       player.y = bottom - player.height + 0.001;
       player.velY = 0;
       player.onGround = true;
